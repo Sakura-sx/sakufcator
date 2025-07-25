@@ -44,13 +44,13 @@ def comments(t: str,s: str):
 
 def int_obfuscation(t: str, s: str):
     if t == tokenize.NUMBER and (s.isdigit() or (s.startswith('-') and s[1:].isdigit())) and "." not in s:
-        return t, f"{obf_int(int(s), 5)}"
+        return t, f"{obf_int(int(s), 8)}"
     return t, s
 
 def str_obfuscation(t: str, s: str):
     if t == tokenize.STRING and ((s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))):
         s = s[1:-1]
-        new_str = obf_str(str(s), 2)
+        new_str = obf_str(str(s), 4)
         # print(f"old: {s} new: {new_str}")
         return t, f"str({new_str})"
     return t, s
@@ -90,7 +90,6 @@ for tok in tokenize.generate_tokens(StringIO(step_5).readline):
         print(tok[1])
 
 print("TEST STEP 5")
-exec(step_5)
 
 
 print("STEP 6")
@@ -102,7 +101,6 @@ for tok in tokenize.generate_tokens(StringIO(step_6).readline):
         print(tok[1])
 
 print("TEST STEP 6")
-exec(step_6)
 
 
 
@@ -110,7 +108,6 @@ print("STEP 7")
 step_7 = transform_tokens(step_6, int_obfuscation)
 
 print(step_7)
-exec(step_7)
 
-with open("step_7.py", "w") as f:
+with open("aaa.py", "w") as f:
     f.write(step_7)
