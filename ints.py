@@ -1,7 +1,5 @@
 import random
 
-integer = 0
-
 def sum(integer: int):
     if integer == 0:
         modifier = random.randint(-100, 100)
@@ -28,11 +26,7 @@ def divide(integer: int):
     modifier = random.randint(-100, 100)
     if modifier == 0:
         modifier = -1
-    rand = random.randint(0,1)
-    if rand == 0 or integer == 0:
-        return integer*modifier, modifier
-    else:
-        return modifier, integer*modifier
+    return integer*modifier, modifier
 
 def obf_int(integer: int, steps: int):
     if steps <= 0:
@@ -57,21 +51,26 @@ def obf_int(integer: int, steps: int):
         return f"(--{obf_int(integer, steps-1)})"
     else:
         return int(integer)
-    
-num1, num2 = sum(integer)
-result = f"({num1}+{num2})"
-print(result)
-print(num1+num2)
+def main():
+    integer = 69
 
-num1, num2 = subtract(integer)
-result = f"({num1}+{num2})"
-print(result)
-print(num1+num2)
+    num1, num2 = sum(integer)
+    result = f"({num1}+{num2})"
+    print(result)
+    print(num1+num2)
+
+    num1, num2 = subtract(integer)
+    result = f"({num1}+{num2})"
+    print(result)
+    print(num1+num2)
 
 
-num1, num2 = divide(integer)
-result = f"(int({num1}/{num2}))"
-print(result)
-print(int(num1/num2))
+    num1, num2 = divide(integer)
+    result = f"(int({num1}/{num2}))"
+    print(result)
+    print(int(num1/num2))
 
-print(f"{obf_int(integer, 10)}")
+    print(f"{obf_int(integer, 15)}")
+
+if __name__ == "__main__":
+    main()
