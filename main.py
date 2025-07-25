@@ -2,6 +2,7 @@ from io import StringIO
 import tokenize
 from ints import obf_int
 from strs import obf_str
+import base64
 
 def transform_tokens(code: str, fn) -> str:
     result = ""
@@ -49,7 +50,9 @@ def int_obfuscation(t: str, s: str):
 def str_obfuscation(t: str, s: str):
     if t == tokenize.STRING and ((s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))):
         s = s[1:-1]
-        return t, f"str({obf_str(str(s), 2)})"
+        new_str = obf_str(str(s), 2)
+        # print(f"old: {s} new: {new_str}")
+        return t, f"str({new_str})"
     return t, s
 
 with open("test.py") as f:
@@ -79,23 +82,35 @@ for tok in tokenize.generate_tokens(StringIO(step_4).readline):
     print(tok)
 
 print("STEP 5")
-step_5 = ""
-for line in step_4.split("\n"):
-    line = line.strip()
-    if line != "":
-        step_5 += f"eval({repr(line)})\n"
-
-step_5 += "\n\n"
+step_5 = f"import base64; exec(base64.b64decode('{base64.b64encode(step_4.encode()).decode()}'))"
 
 print(step_5)
-
 for tok in tokenize.generate_tokens(StringIO(step_5).readline):
-    print(tok)
+    if tok[0] == tokenize.STRING:
+        print(tok[1])
+
+print("TEST STEP 5")
+exec(step_5)
 
 
 print("STEP 6")
 
 step_6 = transform_tokens(step_5, str_obfuscation)
-step_6 = transform_tokens(step_6, int_obfuscation)
-
 print(step_6)
+for tok in tokenize.generate_tokens(StringIO(step_6).readline):
+    if tok[0] == tokenize.STRING or tok[0] == tokenize.NUMBER:
+        print(tok[1])
+
+print("TEST STEP 6")
+exec(step_6)
+
+
+
+print("STEP 7")
+step_7 = transform_tokens(step_6, int_obfuscation)
+
+print(step_7)
+exec(step_7)
+
+with open("step_7.py", "w") as f:
+    f.write(step_7)
