@@ -8,6 +8,11 @@ import hashlib
 import gzip
 import sys
 
+str_steps = 2
+int_steps = 0
+obf_steps = 3
+user_vars = []
+
 def transform_tokens(code: str, fn) -> str:
     result = ""
     transformed_str_builder = []
@@ -83,9 +88,6 @@ def main():
     else:
         output_file = input_file.replace(".py", "_obf.py")
         print(f"No output file specified, using default: {output_file}")
-
-    str_steps = 2
-    int_steps = 0
 
     step_2 = "import sys; sys.setrecursionlimit(99999999) \n" + transform_tokens(step_1, comments)
 
@@ -251,7 +253,6 @@ def main():
     for tok in tokenize.generate_tokens(StringIO(step_4).readline):
         print(tok)
 
-    obf_steps = 3
     step_5 = [None] * obf_steps
     step_5[0] = f"import sys; sys.setrecursionlimit(99999999); print(\"This program has been obfuscated with Sakufcator 1.1-beta\"); import time; time.sleep(1); import gzip; import base64; exec(gzip.decompress(base64.b64decode('{base64.b64encode(gzip.compress(step_4.encode())).decode()}')))"
     print("STEP 5")
