@@ -20,4 +20,4 @@ cd Sakuftator
 ```bash
 python3 main.py <input_file> [output_file]
 ```
-Note: If you get an error of `RecursionError: maximum recursion depth exceeded` try lowering the `obf_steps` variable to 1 in the `main.py` file.
+Note: I have not tested too much for long files, if you get an error of `RecursionError: maximum recursion depth exceeded` try lowering the `obf_steps` variable to 1 in the `main.py` file.
