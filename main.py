@@ -6,6 +6,9 @@ import base64
 import ast
 import hashlib
 
+str_steps = 2
+int_steps = 0
+
 def transform_tokens(code: str, fn) -> str:
     result = ""
     transformed_str_builder = []
@@ -46,13 +49,13 @@ def comments(t: str,s: str):
 
 def int_obfuscation(t: str, s: str):
     if t == tokenize.NUMBER and (s.isdigit() or (s.startswith('-') and s[1:].isdigit())) and "." not in s:
-        return t, f"{obf_int(int(s), 1)}"
+        return t, f"{obf_int(int(s), int_steps)}"
     return t, s
 
 def str_obfuscation(t: str, s: str):
     if t == tokenize.STRING and ((s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))):
         s = s[1:-1]
-        new_str = obf_str(str(s), 1)
+        new_str = obf_str(str(s), str_steps)
         # print(f"old: {s} new: {new_str}")
         return t, f"str({new_str})"
     return t, s
@@ -66,8 +69,7 @@ def replace_vars(t: str, s: str):
 
 with open("test2.py") as f:
     step_1 = f.read()
-
-step_2 = transform_tokens(step_1, comments)
+step_2 = "import sys; sys.setrecursionlimit(99999999) \n" + transform_tokens(step_1, comments)
 
 print(step_2)
 
@@ -232,7 +234,7 @@ for tok in tokenize.generate_tokens(StringIO(step_4).readline):
     print(tok)
 
 print("STEP 5")
-step_5 = f"import base64; exec(base64.b64decode('{base64.b64encode(step_4.encode()).decode()}'))"
+step_5 = f"import sys; print(\"This program has been obfuscated with Sakufcator 1.0-beta\"); import base64; exec(base64.b64decode('{base64.b64encode(step_4.encode()).decode()}'))"
 
 print(step_5)
 for tok in tokenize.generate_tokens(StringIO(step_5).readline):
@@ -243,7 +245,7 @@ print("TEST STEP 5")
 
 
 print("STEP 6")
-
+str_steps = 3
 step_6 = transform_tokens(step_5, str_obfuscation)
 print(step_6)
 for tok in tokenize.generate_tokens(StringIO(step_6).readline):
@@ -255,9 +257,11 @@ print("TEST STEP 6")
 
 
 print("STEP 7")
+int_steps = 1
 step_7 = transform_tokens(step_6, int_obfuscation)
 
 print(step_7)
+step_8 =f"import sys \nsys.setrecursionlimit(99999999); import time; time.sleep(10); print(sys.getrecursionlimit()); time.sleep(3) \nimport base64; exec(base64.b64decode('{base64.b64encode(step_7.encode()).decode()}'))"
 
-with open("aaa.py", "w") as f:
-    f.write(step_7)
+with open("aaaa.py", "w") as f:
+    f.write(step_8)
