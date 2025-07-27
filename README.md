@@ -18,6 +18,10 @@ cd Sakuftator
 
 # Usage
 ```bash
-python3 main.py <input_file> [output_file]
+python3 main.py [option] <input_file> [output_file]
 ```
+Options:
+- `-obf` - obfuscate the code
+- `-zip` - compress the code (recommended to minify the code before compressing it)
+
 Note: I have not tested too much for long files, if you get an error of `RecursionError: maximum recursion depth exceeded` try lowering the `obf_steps` variable to 1 in the `main.py` file.
