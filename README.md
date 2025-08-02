@@ -4,10 +4,10 @@ This project is mostly to get better at python syntax and is not intended for pr
 I also do not really think security through obscurity is that good anyways.
 
 # Features
-- Removes comments
+- Minimifies the code before obfuscation
 - Strings and integers obfuscation
 - Variable flattening
-- Gzip for compression
+- Gzip, bz2, lzma for compression
 - Obfuscates to a one-liner
 
 # Installation

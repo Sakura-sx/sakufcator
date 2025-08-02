@@ -9,6 +9,19 @@ import gzip
 import sys
 import bz2
 import lzma
+try:
+    import python_minifier
+except:
+    print("python_minifier not found, installing...")
+    import os
+    try:
+        os.system("python3 -m ensurepip --upgrade")
+        os.system("python3 -m pip install python_minifier")
+        import python_minifier
+    except:
+        print("Failed to install python_minifier")
+        print("Please install python_minifier manually")
+        exit(1)
 
 mode = "obf"
 str_steps = 2
@@ -76,6 +89,18 @@ def replace_vars(t: str, s: str, _: int):
             return t, hashlib.sha256(s.encode()).hexdigest()[:8]
     return t, s
 
+def minify(code: str) -> str:
+    try:
+        minified = python_minifier.minify(code)
+        result = ""
+        for line in minified.splitlines():
+            result += line + "\n"
+    except Exception as e:
+        print(f"Error minifying code: {e}")
+        print(f"Using original code")
+        result = code
+    return result
+
 def main():
     global experimental_obfuscation
     global str_steps
@@ -91,8 +116,9 @@ def main():
             print("Input file must be a Python file")
             exit(1)
         with open(input_file, "r") as f:
-            step_1 = f.read()
+            original_script = f.read()
         print(f"Input file: {input_file}")
+        step_1 = minify(original_script)
     else:
         print("Usage: python main.py [option] <input_file> [output_file]")
         print("Options:")
@@ -121,7 +147,7 @@ def main():
     
 
     if mode == "obf":
-        step_2 = "import sys; sys.setrecursionlimit(99999999) \n" + transform_tokens(step_1, comments)
+        step_2 = step_1
 
         print(step_2)
 
@@ -131,23 +157,34 @@ def main():
 
 
         if experimental_obfuscation:
-            for tok in tokenize.generate_tokens(StringIO(step_2).readline):
-                if tokenize.tok_name[tok.exact_type] == "NAME":
-                    print(tok.string)
-                    
-            step_2_parsed = ast.parse(step_2)
+            try:
+                for tok in tokenize.generate_tokens(StringIO(step_2).readline):
+                    if tokenize.tok_name[tok.exact_type] == "NAME":
+                        print(tok.string)
+            except:
+                print(f"Error during step 2 (tokenize.generate_tokens), disabling experimental obfuscation might fix it")
+                exit(1)
+            try:        
+                step_2_parsed = ast.parse(step_2)
+            except:
+                print(f"Error parsing step 2 (ast.parse), disabling experimental obfuscation might fix it")
+                exit(1)
             print(ast.dump(step_2_parsed))
             user_vars = []
-            for node in ast.walk(step_2_parsed):
-                if isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            user_vars.append(target.id)
-                elif isinstance(node, ast.AugAssign):
-                    if isinstance(node.target, ast.Name):
-                        user_vars.append(node.target.id)
+            try:
+                for node in ast.walk(step_2_parsed):
+                    if isinstance(node, ast.Assign):
+                        for target in node.targets:
+                            if isinstance(target, ast.Name):
+                                user_vars.append(target.id)
+                    elif isinstance(node, ast.AugAssign):
+                        if isinstance(node.target, ast.Name):
+                            user_vars.append(node.target.id)
 
-            user_vars = list(set(user_vars))
+                user_vars = list(set(user_vars))
+            except:
+                print(f"Error during step 2 (ast.walk), disabling experimental obfuscation might fix it")
+                exit(1)
 
             class VariableFlattener(ast.NodeTransformer):
                 def __init__(self, var_names):
@@ -159,114 +196,153 @@ def main():
                     self.imported_names = set()
                     self.string_counter = 0
                     self.builtin_counter = 0
-                    
-                    for var in var_names:
-                        self.var_name_map[var] = "v" + hashlib.sha256(var.encode()).hexdigest()[:7]
+                    try:
+                        for var in var_names:
+                            self.var_name_map[var] = "v" + hashlib.sha256(var.encode()).hexdigest()[:7]
+                    except:
+                        print(f"Error during step 2 (VariableFlattener), disabling experimental obfuscation might fix it")
+                        exit(1)
                 
                 def visit_Import(self, node):
-                    for alias in node.names:
-                        imported_name = alias.asname if alias.asname else alias.name
-                        self.imported_names.add(imported_name)
+                    try:
+                        for alias in node.names:
+                            imported_name = alias.asname if alias.asname else alias.name
+                            self.imported_names.add(imported_name)
+                    except:
+                        print(f"Error during step 2 (visit_Import), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return node
                 
                 def visit_ImportFrom(self, node):
-                    for alias in node.names:
-                        imported_name = alias.asname if alias.asname else alias.name
-                        self.imported_names.add(imported_name)
+                    try:
+                        for alias in node.names:
+                            imported_name = alias.asname if alias.asname else alias.name
+                            self.imported_names.add(imported_name)
+                    except:
+                        print(f"Error during step 2 (visit_ImportFrom), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return node
                 
                 def get_string_var_name(self, string_value):
-                    if string_value not in self.string_var_map:
-                        string_key = f"str_{self.string_counter}"
-                        self.string_var_map[string_value] = "s" + hashlib.sha256(string_key.encode()).hexdigest()[:7]
-                        self.string_counter += 1
+                    try:
+                        if string_value not in self.string_var_map:
+                            string_key = f"str_{self.string_counter}"
+                            self.string_var_map[string_value] = "s" + hashlib.sha256(string_key.encode()).hexdigest()[:7]
+                            self.string_counter += 1
+                    except:
+                        print(f"Error during step 2 (get_string_var_name), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return self.string_var_map[string_value]
                 
                 def get_builtin_var_name(self, builtin_name):
-                    if builtin_name not in self.builtin_var_map:
-                        builtin_key = f"builtin_{self.builtin_counter}_{builtin_name}"
-                        self.builtin_var_map[builtin_name] = "b" + hashlib.sha256(builtin_key.encode()).hexdigest()[:7]
-                        self.builtin_counter += 1
+                    try:
+                        if builtin_name not in self.builtin_var_map:
+                            builtin_key = f"builtin_{self.builtin_counter}_{builtin_name}"
+                            self.builtin_var_map[builtin_name] = "b" + hashlib.sha256(builtin_key.encode()).hexdigest()[:7]
+                            self.builtin_counter += 1
+                    except:
+                        print(f"Error during step 2 (get_builtin_var_name), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return self.builtin_var_map[builtin_name]
                 
                 def visit_Assign(self, node):
-                    self.generic_visit(node)
-                    if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-                        var_name = node.targets[0].id
-                        if var_name in self.var_names:
-                            new_target = ast.Subscript(
-                                value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
-                                slice=ast.Constant(value=self.var_name_map[var_name]),
-                                ctx=ast.Store()
-                            )
-                            node.targets = [new_target]
+                    try:
+                        self.generic_visit(node)
+                        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                            var_name = node.targets[0].id
+                            if var_name in self.var_names:
+                                new_target = ast.Subscript(
+                                    value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
+                                    slice=ast.Constant(value=self.var_name_map[var_name]),
+                                    ctx=ast.Store()
+                                )
+                                node.targets = [new_target]
+                    except:
+                        print(f"Error during step 2 (visit_Assign), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return node
                 
                 def visit_AugAssign(self, node):
-                    self.generic_visit(node)
-                    if isinstance(node.target, ast.Name) and node.target.id in self.var_names:
-                        node.target = ast.Subscript(
-                            value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
-                            slice=ast.Constant(value=self.var_name_map[node.target.id]),
-                            ctx=ast.Store()
-                        )
+                    try:
+                        self.generic_visit(node)
+                        if isinstance(node.target, ast.Name) and node.target.id in self.var_names:
+                            node.target = ast.Subscript(
+                                value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
+                                slice=ast.Constant(value=self.var_name_map[node.target.id]),
+                                ctx=ast.Store()
+                            )
+                    except:
+                        print(f"Error during step 2 (visit_AugAssign), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return node
                 
                 def visit_JoinedStr(self, node):
-                    parts = []
-                    for value in node.values:
-                        if isinstance(value, ast.Constant):
-                            parts.append(ast.Constant(value=value.value))
-                        elif isinstance(value, ast.FormattedValue):
-                            expr = value.value
-                            expr = self.visit(expr)
-                            str_call = ast.Call(
-                                func=ast.Name(id='str', ctx=ast.Load()),
-                                args=[expr],
-                                keywords=[]
-                            )
-                            parts.append(str_call)
-                    
-                    if len(parts) == 0:
-                        return ast.Constant(value="")
-                    elif len(parts) == 1:
-                        return parts[0]
-                    else:
-                        result = parts[0]
-                        for part in parts[1:]:
-                            result = ast.BinOp(left=result, op=ast.Add(), right=part)
-                        return result
+                    try:
+                        parts = []
+                        for value in node.values:
+                            if isinstance(value, ast.Constant):
+                                parts.append(ast.Constant(value=value.value))
+                            elif isinstance(value, ast.FormattedValue):
+                                expr = value.value
+                                expr = self.visit(expr)
+                                str_call = ast.Call(
+                                    func=ast.Name(id='str', ctx=ast.Load()),
+                                    args=[expr],
+                                    keywords=[]
+                                )
+                                parts.append(str_call)
+                        
+                        if len(parts) == 0:
+                            return ast.Constant(value="")
+                        elif len(parts) == 1:
+                            return parts[0]
+                        else:
+                            result = parts[0]
+                            for part in parts[1:]:
+                                result = ast.BinOp(left=result, op=ast.Add(), right=part)
+                    except:
+                        print(f"Error during step 2 (visit_JoinedStr), disabling experimental obfuscation might fix it")
+                        exit(1)
+                    return result
 
                 def visit_Name(self, node):
-                    if isinstance(node.ctx, ast.Load):
-                        if node.id in self.var_names:
-                            return ast.Subscript(
-                                value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
-                                slice=ast.Constant(value=self.var_name_map[node.id]),
-                                ctx=ast.Load()
-                            )
-                        elif node.id in self.imported_names:
-                            return node
-                        elif node.id in dir(__builtins__):
-                            builtin_var_name = self.get_builtin_var_name(node.id)
-                            return ast.Subscript(
-                                value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
-                                slice=ast.Constant(value=builtin_var_name),
-                                ctx=ast.Load()
-                            )
-                        else:
-                            return node
+                    try:
+                        if isinstance(node.ctx, ast.Load):
+                            if node.id in self.var_names:
+                                return ast.Subscript(
+                                    value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
+                                    slice=ast.Constant(value=self.var_name_map[node.id]),
+                                    ctx=ast.Load()
+                                )
+                            elif node.id in self.imported_names:
+                                return node
+                            elif node.id in dir(__builtins__):
+                                builtin_var_name = self.get_builtin_var_name(node.id)
+                                return ast.Subscript(
+                                    value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
+                                    slice=ast.Constant(value=builtin_var_name),
+                                    ctx=ast.Load()
+                                )
+                            else:
+                                return node
+                    except:
+                        print(f"Error during step 2 (visit_Name), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return node
                 
                 def visit_Constant(self, node):
-                    if isinstance(node.value, str) and len(node.value) > 0:
-                        if len(node.value) > 2:
-                            string_var_name = self.get_string_var_name(node.value)
-                            return ast.Subscript(
-                                value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
-                                slice=ast.Constant(value=string_var_name),
-                                ctx=ast.Load()
-                            )
+                    try:
+                        if isinstance(node.value, str) and len(node.value) > 0:
+                            if len(node.value) > 2:
+                                string_var_name = self.get_string_var_name(node.value)
+                                return ast.Subscript(
+                                    value=ast.Name(id=self.global_var_name, ctx=ast.Load()),
+                                    slice=ast.Constant(value=string_var_name),
+                                    ctx=ast.Load()
+                                )
+                    except:
+                        print(f"Error during step 2 (visit_Constant), disabling experimental obfuscation might fix it")
+                        exit(1)
                     return node
 
             flattener = VariableFlattener(user_vars)
@@ -277,38 +353,52 @@ def main():
                 print("Flattening completed successfully")
             except Exception as e:
                 print(f"Error during flattening: {e}")
+                print(f"Disabling experimental obfuscation might fix it")
                 exit(1)
 
             global_var_name = flattener.global_var_name
             dict_keys = []
             dict_values = []
 
-            for string_value, string_var_name in flattener.string_var_map.items():
-                dict_keys.append(ast.Constant(value=string_var_name))
-                dict_values.append(ast.Constant(value=string_value))
-                print(f"Extracted string: '{string_value}' -> {string_var_name}")
+            try:
+                for string_value, string_var_name in flattener.string_var_map.items():
+                    dict_keys.append(ast.Constant(value=string_var_name))
+                    dict_values.append(ast.Constant(value=string_value))
+                    print(f"Extracted string: '{string_value}' -> {string_var_name}")
 
-            for builtin_name, builtin_var_name in flattener.builtin_var_map.items():
-                dict_keys.append(ast.Constant(value=builtin_var_name))
-                dict_values.append(ast.Name(id=builtin_name, ctx=ast.Load()))
-                print(f"Extracted built-in: '{builtin_name}' -> {builtin_var_name}")
+                for builtin_name, builtin_var_name in flattener.builtin_var_map.items():
+                    dict_keys.append(ast.Constant(value=builtin_var_name))
+                    dict_values.append(ast.Name(id=builtin_name, ctx=ast.Load()))
+                    print(f"Extracted built-in: '{builtin_name}' -> {builtin_var_name}")
 
-            global_init = ast.Assign(
-                targets=[ast.Name(id=global_var_name, ctx=ast.Store())],
-                value=ast.Dict(keys=dict_keys, values=dict_values)
-            )
+                global_init = ast.Assign(
+                    targets=[ast.Name(id=global_var_name, ctx=ast.Store())],
+                    value=ast.Dict(keys=dict_keys, values=dict_values)
+                )
 
-            step_2_parsed.body.insert(0, global_init)
+                step_2_parsed.body.insert(0, global_init)
 
-            ast.fix_missing_locations(step_2_parsed)
+                ast.fix_missing_locations(step_2_parsed)
+            except:
+                print(f"Error during step 2 (ast.fix_missing_locations), disabling experimental obfuscation might fix it")
+                exit(1)
 
+            try:
+                step_2 = ast.unparse(step_2_parsed)
+            except:
+                print(f"Error during step 2 (ast.unparse), disabling experimental obfuscation might fix it")
+                exit(1)
 
-            step_2 = ast.unparse(step_2_parsed)
             print("=== TRANSFORMED CODE ===")
             print(step_2)
             print("=== END TRANSFORMED CODE ===")
 
-            step_3 = transform_tokens(step_2, replace_vars)
+            try:
+                step_3 = transform_tokens(step_2, replace_vars)
+            except:
+                print(f"Error during step 3 (replace_vars), disabling experimental obfuscation might fix it")
+                exit(1)
+
             print("=== VARIABLE REPLACED CODE ===")
             print(step_3)
             print("=== END VARIABLE REPLACED CODE ===")
@@ -316,14 +406,26 @@ def main():
 
             print("STEP 3")
 
-            step_3 = transform_tokens(step_2, int_obfuscation, int_steps)
+            try:
+                step_3 = transform_tokens(step_2, int_obfuscation, int_steps)
+            except:
+                print(f"Error during step 3 (int_obfuscation), disabling experimental obfuscation might fix it")
+                exit(1)
 
             print(step_3)
 
             print("STEP 4")
 
-            step_4 = transform_tokens(step_3, str_obfuscation, str_steps)
-            step_4 = transform_tokens(step_4, int_obfuscation, int_steps)
+            try:
+                step_4 = transform_tokens(step_3, str_obfuscation, str_steps)
+            except:
+                print(f"Error during step 4 (str_obfuscation), disabling experimental obfuscation might fix it")
+                exit(1)
+            try:
+                step_4 = transform_tokens(step_4, int_obfuscation, int_steps)
+            except:
+                print(f"Error during step 4 (int_obfuscation), disabling experimental obfuscation might fix it")
+                exit(1)
 
             print(step_4)
             for tok in tokenize.generate_tokens(StringIO(step_4).readline):
@@ -359,61 +461,64 @@ def main():
         
         print("STEP 5")
         print(step_5[0])
-        for tok in tokenize.generate_tokens(StringIO(step_5[0]).readline):
-            if tok[0] == tokenize.STRING:
-                print(tok[1])
+        try:
+            for tok in tokenize.generate_tokens(StringIO(step_5[0]).readline):
+                if tok[0] == tokenize.STRING:
+                    print(tok[1])
+        except:
+            print(f"Error during step 5")
+            exit(1)
 
         step_6 = [None] * obf_steps
         step_7 = [None] * obf_steps
         step_8 = [None] * obf_steps
         for step in range(obf_steps):
-            
-
-
-            print(f"STEP {(step*3)+6}")
-            str_steps = 1+step
-            step_6[step] = transform_tokens(step_5[step], str_obfuscation, str_steps)
-            print(step_6[step])
-            for tok in tokenize.generate_tokens(StringIO(step_6[step]).readline):
-                if tok[0] == tokenize.STRING or tok[0] == tokenize.NUMBER:
-                    print(tok[1])
-
+            try:
+                print(f"STEP {(step*3)+6}")
+                str_steps = 1+step
+                step_6[step] = transform_tokens(step_5[step], str_obfuscation, str_steps)
+                print(step_6[step])
+                for tok in tokenize.generate_tokens(StringIO(step_6[step]).readline):
+                    if tok[0] == tokenize.STRING or tok[0] == tokenize.NUMBER:
+                        print(tok[1])
 
 
 
-            print(f"STEP {(step*3)+7}")
-            int_steps = 2+step
-            step_7[step] = transform_tokens(step_6[step], int_obfuscation, int_steps)
+                print(f"STEP {(step*3)+7}")
+                int_steps = 2+step
+                step_7[step] = transform_tokens(step_6[step], int_obfuscation, int_steps)
 
-            print(step_7[step])
+                print(step_7[step])
 
 
-            print(f"STEP {(step*3)+8}")
-            if fast_compression:
-                step_8[step] =f"import sys; sys.setrecursionlimit(99999999); exec(gzip.decompress(base64.b64decode('{base64.b64encode(gzip.compress(step_7[step].encode())).decode()}')))"
-            else:
-                gzip_7 = base64.b64encode(gzip.compress(step_7[step].encode())).decode()
-                bz2_7 = base64.b64encode(bz2.compress(step_7[step].encode())).decode()
-                lzma_7 = base64.b64encode(lzma.compress(step_7[step].encode())).decode()
-                len_7 = len(step_7[step])
-                len_gzip_7 = len(gzip_7)
-                len_bz2_7 = len(bz2_7)
-                len_lzma_7 = len(lzma_7)
-                print(f"Length of step 7: {len_7}")
-                print(f"Length of gzip step 7: {len_gzip_7} ({len_gzip_7/len_7*100:.2f}%)")
-                print(f"Length of bz2 step 7: {len_bz2_7} ({len_bz2_7/len_7*100:.2f}%)")
-                print(f"Length of lzma step 7: {len_lzma_7} ({len_lzma_7/len_7*100:.2f}%)")
-                winner = min(len_gzip_7, len_bz2_7, len_lzma_7)
-                if winner == len_gzip_7:
-                    step_8[step] = f"sys.setrecursionlimit(99999999); exec(gzip.decompress(base64.b64decode('{gzip_7}')))"
-                elif winner == len_bz2_7:
-                    step_8[step] = f"sys.setrecursionlimit(99999999); exec(bz2.decompress(base64.b64decode('{bz2_7}')));"
-                elif winner == len_lzma_7:
-                    step_8[step] = f"sys.setrecursionlimit(99999999); exec(lzma.decompress(base64.b64decode('{lzma_7}')));"
-                compression_used[step+1] = "gzip" if winner == len_gzip_7 else "bz2" if winner == len_bz2_7 else "lzma"
-            if step < obf_steps - 1:
-                step_5[step+1] = step_8[step]
-
+                print(f"STEP {(step*3)+8}")
+                if fast_compression:
+                    step_8[step] =f"exec(gzip.decompress(base64.b64decode('{base64.b64encode(gzip.compress(step_7[step].encode())).decode()}')))"
+                else:
+                    gzip_7 = base64.b64encode(gzip.compress(step_7[step].encode())).decode()
+                    bz2_7 = base64.b64encode(bz2.compress(step_7[step].encode())).decode()
+                    lzma_7 = base64.b64encode(lzma.compress(step_7[step].encode())).decode()
+                    len_7 = len(step_7[step])
+                    len_gzip_7 = len(gzip_7)
+                    len_bz2_7 = len(bz2_7)
+                    len_lzma_7 = len(lzma_7)
+                    print(f"Length of step 7: {len_7}")
+                    print(f"Length of gzip step 7: {len_gzip_7} ({len_gzip_7/len_7*100:.2f}%)")
+                    print(f"Length of bz2 step 7: {len_bz2_7} ({len_bz2_7/len_7*100:.2f}%)")
+                    print(f"Length of lzma step 7: {len_lzma_7} ({len_lzma_7/len_7*100:.2f}%)")
+                    winner = min(len_gzip_7, len_bz2_7, len_lzma_7)
+                    if winner == len_gzip_7:
+                        step_8[step] = f"exec(gzip.decompress(base64.b64decode('{gzip_7}')))"
+                    elif winner == len_bz2_7:
+                        step_8[step] = f"exec(bz2.decompress(base64.b64decode('{bz2_7}')));"
+                    elif winner == len_lzma_7:
+                        step_8[step] = f"exec(lzma.decompress(base64.b64decode('{lzma_7}')));"
+                    compression_used[step+1] = "gzip" if winner == len_gzip_7 else "bz2" if winner == len_bz2_7 else "lzma"
+                if step < obf_steps - 1:
+                    step_5[step+1] = step_8[step]
+            except:
+                print(f"Error during step {step*3+6}")
+                exit(1)
 
         print(f"Length of step 1: {len(step_1)}")
         print(f"Length of step 2: {len(step_2)}")
@@ -430,16 +535,32 @@ def main():
             if not fast_compression:
                 print(f"Compression used: {compression_used[step+1]}")
 
-        script = "import sys; import time; import gzip; import bz2; import lzma; import base64; "
+        script = "import sys,time,gzip,bz2,lzma,base64;sys.setrecursionlimit(99999999);"
         script += step_8[obf_steps-1]
-    else:
+    elif mode == "zip":
         if fast_compression:
-            script = f"import sys; sys.setrecursionlimit(99999999); import gzip; import base64; exec(gzip.decompress(base64.b64decode('{base64.b64encode(gzip.compress(step_7[step].encode())).decode()}')))"
+            try:
+                script = minify(f"import gzip,base64;exec(gzip.decompress(base64.b64decode('{base64.b64encode(gzip.compress(step_1.encode())).decode()}')))")
+            except Exception as e:
+                print(f"Error compressing code (gzip): {e}")
+                exit(1)
         else:
-            script_gzip = base64.b64encode(gzip.compress(transform_tokens(step_1, comments).encode())).decode()
-            script_bz2 = base64.b64encode(bz2.compress(transform_tokens(step_1, comments).encode())).decode()
-            script_lzma = base64.b64encode(lzma.compress(transform_tokens(step_1, comments).encode())).decode()
-            len_1 = len(transform_tokens(step_1, comments))
+            try:
+                script_gzip = minify(f"import gzip,base64;exec(gzip.decompress(base64.b64decode('{base64.b64encode(gzip.compress(step_1.encode())).decode()}')))")
+            except:
+                print(f"Error compressing code (gzip): {e}")
+                exit(1)
+            try:
+                script_bz2 = minify(f"import bz2,base64;exec(bz2.decompress(base64.b64decode('{base64.b64encode(bz2.compress(step_1.encode())).decode()}')))")
+            except:
+                print(f"Error compressing code (bz2): {e}")
+                exit(1)
+            try:
+                script_lzma = minify(f"import lzma,base64;exec(lzma.decompress(base64.b64decode('{base64.b64encode(lzma.compress(step_1.encode())).decode()}')));")
+            except:
+                print(f"Error compressing code (lzma): {e}")
+                exit(1)
+            len_1 = len(original_script)
             len_gzip = len(script_gzip)
             len_bz2 = len(script_bz2)
             len_lzma = len(script_lzma)
@@ -449,24 +570,29 @@ def main():
             print(f"Length of lzma script: {len_lzma} ({len_lzma/len_1*100:.2f}%)")
             winner = min(len_gzip, len_bz2, len_lzma)
             if winner == len_gzip:
-                script = f" import sys; sys.setrecursionlimit(99999999); import gzip; import base64; exec(gzip.decompress(base64.b64decode('{script_gzip}')))"
+                script = script_gzip
             elif winner == len_bz2:
-                script = f" import sys; sys.setrecursionlimit(99999999); import bz2; import base64; exec(bz2.decompress(base64.b64decode('{script_bz2}')));"
+                script = script_bz2
             elif winner == len_lzma:
-                script = f"import sys; sys.setrecursionlimit(99999999); import lzma; import base64; exec(lzma.decompress(base64.b64decode('{script_lzma}')));"
+                script = script_lzma
             compression_used = "gzip" if winner == len_gzip else "bz2" if winner == len_bz2 else "lzma"
             print(f"Compression used: {compression_used}")
-            print(f"Original length (Including compression overhead): {len(step_1)} (100%)")
-            print(f"Compressed length (Including compression overhead): {len(script)} ({len(script)/len(step_1)*100:.2f}%)")
-
+            print(f"Original length (Including compression overhead): {len(original_script)} (100%)")
+            print(f"Compressed length (Including compression overhead): {len(script)} ({len(script)/len(original_script)*100:.2f}%)")
+    else:
+        print("Invalid mode")
+        exit(1)
 
     print("Saving script...")
-    with open(output_file, "w") as f:
-        f.write(script)
+    try:
+        with open(output_file, "w") as f:
+            f.write(script)
+    except Exception as e:
+        print(f"Error saving script: {e}")
+        print(f"Script: {script}")
+        exit(1)
     print(f"Script saved to {output_file}")
     print(f"Script length: {len(script)}")
-    if mode == "zip":
-        print(f"It is recommended to minify the script before compressing it")
 
 if __name__ == "__main__":
     main()
